@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pokemon Challenges</title>
+  <style>
+    .container {
+      display: flex;
+      align-items: center;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      margin-bottom: 5px;
+    }
+
+    .legend-color {
+      width: 20px;
+      height: 20px;
+      margin-right: 10px;
+    }
+    h1, p {
+      text-align: center;
+      font-family: 'Gill Sans', 'Gill Sans MT', Calibri, 'Trebuchet MS', sans-serif;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div>
+      <h1>Pokemon sorted by type (pack graph)</h1>
+      <p>There are 151 Pokemon Total</p>
+      <svg id="svg" width="500" height="500"></svg>
+    </div>
+    <div id="legend"></div>
+  </div>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script>
+    async function handleData() {
+      const data = await d3.csv('/data/pokemon.csv')
+
+      // Create a color scale
+      const colorScale = d3
+        .scaleOrdinal([...d3.schemeSet3, ...d3.schemeCategory10.slice(0, 5)])
+        .domain(d3.extent(data, d => d.Type1))
+
+      // Group data by Type1 and count the number of occurrences
+      const typeCounts = Array.from(d3.group(data, d => d.Type1), ([key, values]) => ({
+        key,
+        values,
+        count: values.length,
+      }))
+
+      // Number formatter
+      const num_f = d3.format('.0f')
+
+      const root = d3.hierarchy({ children: typeCounts }).sum(d => d.count)
+
+      const pack = d3.pack().size([500, 500]).padding(10)
+
+      const rootNode = pack(root)
+
+      const svg = d3.select('#svg').style('border', '1px solid')
+
+      svg
+        .selectAll('g')
+        .data(rootNode.leaves())
+        .join('g') // Join your group.
+        // Position each node using x and y
+        .attr('transform', d => `translate(${d.x}, ${d.y})`)
+        // Add a circle to each group
+        .append('circle')
+        // Set the radius based on the value (count) of each node
+        .attr('r', d => d.r)
+        // Set the color of each circle based on the Type1 category
+        .attr('fill', d => colorScale(d.data.key))
+
+      // Add a text node to each group
+      svg
+        .selectAll('g')
+        .data(rootNode.leaves())
+        .join('g')
+        // Add a text node
+        .append('text')
+        // Set the text to display the count
+        .text(d => num_f(d.data.count))
+        // Set the font
+        .attr('font-family', 'Helvetica')
+        // Position the text in the center
+        .style('text-anchor', 'middle')
+        .style('alignment-baseline', 'middle')
+        .style('mix-blend-mode', 'difference')
+        .style('fill', 'white')
+
+      // Create the legend
+      const legendContainer = d3.select('#legend')
+
+      const legend = legendContainer
+        .selectAll('.legend-item')
+        .data(colorScale.domain())
+        .join('div')
+        .attr('class', 'legend-item')
+
+      legend
+        .append('div')
+        .attr('class', 'legend-color')
+        .style('background-color', d => colorScale(d))
+
+      legend.append('span').text(d => d)
+    }
+
+    handleData()
+  </script>
+</body>
+</html>

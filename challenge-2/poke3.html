@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pokemon Connected Scatterplot</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: Arial, sans-serif;
+      background-color: #f7f7f7;
+    }
+
+    h1, p {
+      text-align: center;
+    }
+
+    .scatterplot-container {
+      width: 850px;
+      margin: 0 auto;
+    }
+
+    .scatterplot {
+      border: 1px solid #ddd;
+      background-color: white;
+    }
+
+    .dot {
+      fill: steelblue;
+      stroke: #fff;
+    }
+
+    .dot:hover {
+      fill: orange;
+    }
+
+    .median-line {
+      stroke: red;
+      stroke-dasharray: 4;
+    }
+  </style>
+</head>
+<body>
+  <h1>Pokemon Connected Scatterplot</h1>
+  <p>Based on Total score (Attack, Defense, HP, Speed etc - for each pokemon)</p>
+  <div class="scatterplot-container">
+    <svg class="scatterplot" width="800" height="400"></svg>
+  </div>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script>
+    async function handleData() {
+      const data = await d3.csv('/data/pokemon.csv');
+
+      const margin = { top: 20, right: 20, bottom: 50, left: 50 };
+      const width = 800 - margin.left - margin.right;
+      const height = 400 - margin.top - margin.bottom;
+
+      const xScale = d3.scaleLinear()
+        .domain([1, 151])
+        .range([0, width]);
+
+      const yScale = d3.scaleLinear()
+        .domain([0, d3.max(data, d => +d.Total)])
+        .range([height, 0]);
+
+      const line = d3.line()
+        .x(d => xScale(+d.ID))
+        .y(d => yScale(+d.Total));
+
+      const medianValue = d3.median(data, d => +d.Total);
+
+      const svg = d3.select('.scatterplot')
+        .append('g')
+        .attr('transform', `translate(${margin.left}, ${margin.top})`);
+
+      svg.append('path')
+        .datum(data)
+        .attr('class', 'line')
+        .attr('fill', 'none')
+        .attr('stroke', 'steelblue')
+        .attr('stroke-width', 2)
+        .attr('d', line);
+
+      svg.selectAll('.dot')
+        .data(data)
+        .enter()
+        .append('circle')
+        .attr('class', 'dot')
+        .attr('cx', d => xScale(+d.ID))
+        .attr('cy', d => yScale(+d.Total))
+        .attr('r', 4);
+
+      svg.append('line')
+        .attr('class', 'median-line')
+        .attr('x1', 0)
+        .attr('y1', yScale(medianValue))
+        .attr('x2', width)
+        .attr('y2', yScale(medianValue));
+
+      svg.append('g')
+        .attr('class', 'x-axis')
+        .attr('transform', `translate(0, ${height})`)
+        .call(d3.axisBottom(xScale).tickSizeOuter(0));
+
+      svg.append('g')
+        .attr('class', 'y-axis')
+        .call(d3.axisLeft(yScale).tickSizeOuter(0));
+
+      svg.append('text')
+        .attr('class', 'x-axis-label')
+        .attr('x', width / 2)
+        .attr('y', height + margin.bottom - 10)
+        .attr('text-anchor', 'middle')
+        .text('Pokemon ID');
+
+      svg.append('text')
+        .attr('class', 'y-axis-label')
+        .attr('transform', 'rotate(-90)')
+        .attr('x', -height / 2)
+        .attr('y', -margin.left + 15)
+        .attr('text-anchor', 'middle')
+        .text('Total');
+
+      svg.append('text')
+        .attr('class', 'median-label')
+        .attr('x', width - 20)
+        .attr('y', yScale(medianValue) - 10)
+        .attr('text-anchor', 'end')
+        .text(`Median: ${medianValue}`);
+    }
+
+    handleData();
+  </script>
+</body>
+</html>

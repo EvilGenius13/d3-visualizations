@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Joey Chestnut Food Charts</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="https://d3js.org/d3-scale-chromatic.v3.min.js"></script>
+  <style>
+    .chart-container {
+      display: inline-block;
+      margin: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="chart-container">
+    <h1>Joey Chestnut quantities of different foods eaten (Bar Chart)</h1>
+    <svg id="chart1"></svg>
+  </div>
+  <div class="chart-container">
+    <h1>Joey Chestnut RPM food per minute (Bar Chart)</h1>
+    <svg id="chart2"></svg>
+  </div>
+
+  <script>
+    // Load the CSV data and create the charts
+    Promise.all([
+      d3.csv("../data/joey.csv"),
+      d3.csv("../data/joey.csv")
+    ]).then(function(data) {
+      // Filter out weighted foods for chart1
+      let chart1Data = data[0].filter(function(d) {
+        return !isNaN(+d.Quantity);
+      });
+      // Convert quantity values to numbers for chart1
+      chart1Data.forEach(function(d) {
+        d.Quantity = +d.Quantity;
+      });
+
+      // Filter out weighted foods for chart2
+      let chart2Data = data[1].filter(function(d) {
+        return !isNaN(+d.Quantity) && !isNaN(+d.Date);
+      });
+      // Extract duration from description and convert to minutes for chart2
+      chart2Data.forEach(function(d) {
+        let duration = d.Description.match(/\d+/); // Extract integer from description
+        let durationMinutes = +duration[0]; // Convert duration to minutes
+        d.QuantityPerMinute = +d.Quantity / durationMinutes;
+      });
+
+      // Set up the dimensions of the charts
+      let margin = {top: 20, right: 100, bottom: 150, left: 80},
+          width = 1000 - margin.left - margin.right,
+          height = 400 - margin.top - margin.bottom;
+
+      // Create the SVG containers for the charts
+      let svg1 = d3.select("#chart1")
+                  .attr("width", width + margin.left + margin.right)
+                  .attr("height", height + margin.top + margin.bottom)
+                  .append("g")
+                  .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+      let svg2 = d3.select("#chart2")
+                  .attr("width", width + margin.left + margin.right)
+                  .attr("height", height + margin.top + margin.bottom)
+                  .append("g")
+                  .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+      // Set the x-axis scale for chart1
+      let x1 = d3.scaleBand()
+                .domain(chart1Data.map(function(d) { return d.Food; }))
+                .range([0, width])
+                .padding(0.1);
+
+      // Set the y-axis scale for chart1
+      let y1 = d3.scaleLinear()
+                .domain([0, d3.max(chart1Data, function(d) { return d.Quantity; })])
+                .range([height, 0]);
+
+      // Set the x-axis scale for chart2
+      let x2 = d3.scaleBand()
+                .domain(chart2Data.map(function(d) { return d.Food; }))
+                .range([0, width])
+                .padding(0.1);
+
+      // Set the y-axis scale for chart2
+      let y2 = d3.scaleLinear()
+                .domain([0, d3.max(chart2Data, function(d) { return d.QuantityPerMinute; })])
+                .range([height, 0]);
+
+      // Generate random colors
+      let color = d3.scaleOrdinal(d3.schemeTableau10);
+
+      // Add the x-axis to chart1
+      svg1.append("g")
+         .attr("transform", "translate(0," + height + ")")
+         .call(d3.axisBottom(x1))
+         .selectAll("text")
+         .attr("transform", "rotate(-45)")
+         .style("text-anchor", "end")
+         .attr("dx", "-0.8em")
+         .attr("dy", "0.15em")
+         .style("font-size", "10px");
+
+      // Add the y-axis to chart1
+      svg1.append("g")
+         .call(d3.axisLeft(y1));
+
+      // Add the bars to chart1
+      svg1.selectAll(".bar")
+         .data(chart1Data)
+         .enter()
+         .append("rect")
+         .attr("class", "bar")
+         .attr("x", function(d) { return x1(d.Food); })
+         .attr("width", x1.bandwidth())
+         .attr("y", function(d) { return y1(d.Quantity); })
+         .attr("height", function(d) { return height - y1(d.Quantity); })
+         .style("fill", function(d, i) { return color(i); })
+         .style("filter", "url(#bar-shadow)");
+
+      // Add the gradient filter for the 3D effect to chart1
+      let gradient1 = svg1.append("defs")
+                          .append("linearGradient")
+                          .attr("id", "bar-gradient")
+                          .attr("gradientUnits", "userSpaceOnUse")
+                          .attr("x1", 0).attr("y1", 0)
+                          .attr("x2", 0).attr("y2", height);
+
+      gradient1.append("stop")
+              .attr("offset", "0%")
+              .attr("stop-color", "white")
+              .attr("stop-opacity", 0.5);
+
+      gradient1.append("stop")
+              .attr("offset", "100%")
+              .attr("stop-color", "gray")
+              .attr("stop-opacity", 0.8);
+
+      // Add the shadow filter for the 3D effect to chart1
+      let shadow1 = svg1.append("defs")
+                      .append("filter")
+                      .attr("id", "bar-shadow")
+                      .attr("x", -20)
+                      .attr("y", -20)
+                      .attr("width", 1.5 * width)
+                      .attr("height", 1.5 * height);
+
+      shadow1.append("feGaussianBlur")
+            .attr("in", "SourceAlpha")
+            .attr("stdDeviation", 3);
+
+      shadow1.append("feOffset")
+            .attr("dx", 3)
+            .attr("dy", 3);
+
+      let feMerge1 = shadow1.append("feMerge");
+      feMerge1.append("feMergeNode");
+      feMerge1.append("feMergeNode").attr("in", "SourceGraphic");
+
+      // Add the x-axis to chart2
+      svg2.append("g")
+         .attr("transform", "translate(0," + height + ")")
+         .call(d3.axisBottom(x2))
+         .selectAll("text")
+         .attr("transform", "rotate(-45)")
+         .style("text-anchor", "end")
+         .attr("dx", "-0.8em")
+         .attr("dy", "0.15em")
+         .style("font-size", "10px");
+
+      // Add the y-axis to chart2
+      svg2.append("g")
+         .call(d3.axisLeft(y2));
+
+      // Add the bars to chart2
+      svg2.selectAll(".bar")
+         .data(chart2Data)
+         .enter()
+         .append("rect")
+         .attr("class", "bar")
+         .attr("x", function(d) { return x2(d.Food); })
+         .attr("width", x2.bandwidth())
+         .attr("y", function(d) { return y2(d.QuantityPerMinute); })
+         .attr("height", function(d) { return height - y2(d.QuantityPerMinute); })
+         .style("fill", function(d, i) { return color(i); })
+         .style("filter", "url(#bar-shadow)");
+
+      // Add the gradient filter for the 3D effect to chart2
+      let gradient2 = svg2.append("defs")
+                          .append("linearGradient")
+                          .attr("id", "bar-gradient")
+                          .attr("gradientUnits", "userSpaceOnUse")
+                          .attr("x1", 0).attr("y1", 0)
+                          .attr("x2", 0).attr("y2", height);
+
+      gradient2.append("stop")
+              .attr("offset", "0%")
+              .attr("stop-color", "white")
+              .attr("stop-opacity", 0.5);
+
+      gradient2.append("stop")
+              .attr("offset", "100%")
+              .attr("stop-color", "gray")
+              .attr("stop-opacity", 0.8);
+
+      // Add the shadow filter for the 3D effect to chart2
+      let shadow2 = svg2.append("defs")
+                      .append("filter")
+                      .attr("id", "bar-shadow")
+                      .attr("x", -20)
+                      .attr("y", -20)
+                      .attr("width", 1.5 * width)
+                      .attr("height", 1.5 * height);
+
+      shadow2.append("feGaussianBlur")
+            .attr("in", "SourceAlpha")
+            .attr("stdDeviation", 3);
+
+      shadow2.append("feOffset")
+            .attr("dx", 3)
+            .attr("dy", 3);
+
+      let feMerge2 = shadow2.append("feMerge");
+      feMerge2.append("feMergeNode");
+      feMerge2.append("feMergeNode").attr("in", "SourceGraphic");
+    });
+  </script>
+</body>
+</html>

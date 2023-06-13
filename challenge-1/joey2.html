@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Joey Chestnut Food Quantity Pie Chart</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+<body>
+  <h1>Joey Chestnut quantity of food eaten per year (Pie Chart)</h1>
+  <script>
+    // Load the CSV data
+    d3.csv("../data/joey.csv").then(function(data) {
+      // Filter out entries with non-integer quantities or invalid descriptions
+      data = data.filter(function(d) {
+        let quantity = d.Quantity.trim(); // Remove leading/trailing whitespace
+
+        // Check if quantity is a valid number
+        if (isNaN(parseFloat(quantity))) {
+          console.log('Invalid quantity:', quantity);
+          return false;
+        }
+
+        let description = d.Description.trim(); // Remove leading/trailing whitespace
+
+        // Check if description is empty or contains invalid values
+        if (description === '' || description.includes(',') || description.includes(':')) {
+          console.log('Invalid description:', description);
+          return false;
+        }
+
+        let duration = d.Duration.trim(); // Remove leading/trailing whitespace
+
+        // Check if duration is a valid year
+        if (!/^\d{4}$/.test(duration)) {
+          console.log('Invalid duration:', duration);
+          return false;
+        }
+
+        d.Quantity = +quantity; // Convert quantity to a number
+        d.Duration = duration;
+
+        return true;
+      });
+
+      // Calculate the quantities per year
+      let quantitiesPerYear = d3.rollup(
+        data,
+        (v) => d3.sum(v, (d) => d.Quantity),
+        (d) => d.Duration
+      );
+
+      // Convert the quantities per year to an array of objects with stacked data
+      let stackedData = Array.from(quantitiesPerYear, ([duration, quantity]) => ({ year: duration, quantity }));
+
+      // Exclude entries with invalid years
+      stackedData = stackedData.filter((d) => d.year !== '');
+
+      // Sort the stackedData array by year
+      stackedData.sort((a, b) => a.year - b.year);
+
+      // Set up the dimensions of the chart
+      let margin = { top: 20, right: 20, bottom: 30, left: 200 }, // Adjust the left margin as needed
+        width = 1000 - margin.left - margin.right,
+        height = 600 - margin.top - margin.bottom,
+        radius = Math.min(width, height) / 2;
+
+      // Create the SVG container
+      let svg = d3.select("body")
+        .append("svg")
+        .attr("width", width + margin.left + margin.right)
+        .attr("height", height + margin.top + margin.bottom)
+        .append("g")
+        .attr("transform", "translate(" + (width / 2 + margin.left) + "," + (height / 2 + margin.top) + ")");
+
+      // Set the color scale for the pie chart
+      let color = d3.scaleOrdinal([...d3.schemePaired, 'purple']);
+
+      // Generate the pie layout
+      let pie = d3.pie()
+        .value((d) => d.quantity);
+
+      // Generate the arc for each slice of the pie
+      let arc = d3.arc()
+        .innerRadius(0)
+        .outerRadius(radius);
+
+      // Create the slices of the pie chart
+      let slices = svg.selectAll("path")
+        .data(pie(stackedData))
+        .enter()
+        .append("path")
+        .attr("d", arc)
+        .attr("fill", (d, i) => color(i))
+        .attr("stroke", "white")
+        .attr("stroke-width", 2);
+
+      // Create the legend
+      let legend = svg.selectAll(".legend")
+        .data(stackedData)
+        .enter()
+        .append("g")
+        .attr("class", "legend")
+        .attr("transform", function(d, i) {
+          let legendHeight = 20; // Adjust the legend height as needed
+          let legendSpacing = 8; // Adjust the legend spacing as needed
+          let offset = legendHeight * stackedData.length / 2;
+          let hori = -margin.left - 250; // Adjust the legend position as needed
+          let vert = i * (legendHeight + legendSpacing) - offset - 60;
+          return "translate(" + hori + "," + vert + ")";
+        });
+
+      // Add legend color rectangles
+      legend.append("rect")
+        .attr("width", 18) // Adjust the legend color rectangle width as needed
+        .attr("height", 18) // Adjust the legend color rectangle height as needed
+        .style("fill", (d) => color(d.year));
+
+      // Add legend text
+      legend.append("text")
+        .attr("x", 30) // Adjust the legend text x-coordinate as needed
+        .attr("y", 9) // Adjust the legend text y-coordinate as needed
+        .attr("dy", ".35em")
+        .text((d) => d.year);
+
+    });
+  </script>
+</body>
+</html>

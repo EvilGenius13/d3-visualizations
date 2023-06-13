@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Joey Chestnut Food Quantity Scatter Plot</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+<body>
+  <h1>Joey Chestnut quantities of different foods eaten by year (Scatter Plot)</h1>
+  <script>
+    // Load the CSV data
+    d3.csv("../data/joey.csv").then(function(data) {
+      // Filter out entries with non-numeric quantities or invalid descriptions
+      data = data.filter(function(d) {
+        let quantity = parseFloat(d.Quantity.trim()); // Parse quantity as a floating-point number
+
+        // Check if quantity is a valid number
+        if (isNaN(quantity)) {
+          console.log('Invalid quantity:', d.Quantity);
+          return false;
+        }
+
+        let description = d.Description.trim(); // Remove leading/trailing whitespace
+
+        // Check if description is empty or contains invalid values
+        if (description === '' || description.includes(',') || description.includes(':')) {
+          console.log('Invalid description:', description);
+          return false;
+        }
+
+        let date = new Date(d.Duration).getFullYear();
+
+        // Check if date is a valid year
+        if (isNaN(date)) {
+          console.log('Invalid date:', d.Duration);
+          return false;
+        }
+
+        d.Quantity = quantity; // Assign parsed quantity back to the data
+        d.Date = date;
+
+        return true;
+      });
+
+      // Set up the dimensions of the chart
+      let margin = {top: 20, right: 20, bottom: 30, left: 50},
+          width = 1000 - margin.left - margin.right,
+          height = 500 - margin.top - margin.bottom;
+
+      // Create the SVG container
+      let svg = d3.select("body")
+                  .append("svg")
+                  .attr("width", width + margin.left + margin.right)
+                  .attr("height", height + margin.top + margin.bottom)
+                  .append("g")
+                  .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+      // Set the x-axis scale
+      let x = d3.scaleLinear()
+                .domain(d3.extent(data, function(d) { return d.Date; }))
+                .range([0, width]);
+
+      // Set the y-axis scale
+      let y = d3.scaleLinear()
+                .domain([0, d3.max(data, function(d) { return d.Quantity; })])
+                .range([height, 0]);
+
+      // Add the x-axis to the chart
+      svg.append("g")
+         .attr("transform", "translate(0," + height + ")")
+         .call(d3.axisBottom(x).tickFormat(d3.format("d")));
+
+      // Add the y-axis to the chart
+      svg.append("g")
+         .call(d3.axisLeft(y));
+
+      // Create the scatter plot
+      svg.selectAll("circle")
+         .data(data)
+         .enter()
+         .append("circle")
+         .attr("cx", function(d) { return x(d.Date); })
+         .attr("cy", function(d) { return y(d.Quantity); })
+         .attr("r", 4)
+         .attr("fill", "steelblue");
+    });
+  </script>
+</body>
+</html>
+
