@@ -7,7 +7,7 @@
   <title>Pokemon Challenges</title>
 </head>
 <body>
-  <h1>Pokemon Theme Song audio visualizer</h1>
+  <h1>Pokemon Theme Song audio visualizer - caution starts at max volume</h1>
   <audio id="audioElement" src="../music/poke_theme.mp3"></audio>
   <div>
     <button onclick="document.getElementById('audioElement').play()">Play the Audio</button>
@@ -18,25 +18,25 @@
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://d3js.org/d3.v7.min.js"></script>
   <script>
-    var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    var audioElement = document.getElementById('audioElement');
-    var audioSrc = audioCtx.createMediaElementSource(audioElement);
-    var analyser = audioCtx.createAnalyser();
+    let audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    let audioElement = document.getElementById('audioElement');
+    let audioSrc = audioCtx.createMediaElementSource(audioElement);
+    let analyser = audioCtx.createAnalyser();
 
     audioSrc.connect(analyser);
     analyser.connect(audioCtx.destination);
 
-    var frequencyData = new Uint8Array(200);
+    let frequencyData = new Uint8Array(200);
 
-    var svgHeight = '300';
-    var svgWidth = '1200';
-    var barPadding = '1';
+    let svgHeight = '300';
+    let svgWidth = '1200';
+    let barPadding = '1';
 
     function createSvg(parent, height, width) {
       return d3.select(parent).append('svg').attr('height', height).attr('width', width);
     }
 
-    var svg = createSvg('body', svgHeight, svgWidth);
+    let svg = createSvg('body', svgHeight, svgWidth);
 
     svg.selectAll('rect')
       .data(frequencyData)

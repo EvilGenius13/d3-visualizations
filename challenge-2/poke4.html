@@ -1,167 +1,366 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Pokemon Radar Chart - Hexagon</title>
+  <meta http-equiv="Content-Type" content="text/html;charset=utf-8"/ >
+  <title>Radar Chart Integration</title>
+
+  <!-- Google fonts -->
+  <link href='http://fonts.googleapis.com/css?family=Open+Sans:400,300' rel='stylesheet' type='text/css'>
+  <link href='https://fonts.googleapis.com/css?family=Raleway' rel='stylesheet' type='text/css'>
+
+  <!-- D3.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.6/d3.min.js" charset="utf-8"></script>
+
   <style>
-    svg {
-      background-color: #f5f5f5;
-    }
-
-    .axis line,
-    .axis path {
-      stroke: #333;
-      stroke-width: 1px;
-    }
-
-    .axis text {
-      font-family: sans-serif;
-      font-size: 12px;
+    body {
+      font-family: 'Open Sans', sans-serif;
+      font-size: 11px;
+      font-weight: 300;
+      fill: #242424;
+      text-align: center;
+      text-shadow: 0 1px 0 #fff, 1px 0 0 #fff, -1px 0 0 #fff, 0 -1px 0 #fff;
+      cursor: default;
     }
 
     .legend {
-      font-family: sans-serif;
-      font-size: 14px;
-      font-weight: bold;
+      font-family: 'Raleway', sans-serif;
+      fill: #333333;
     }
 
-    .input-container {
-      margin-bottom: 20px;
+    .tooltip {
+      fill: #333333;
     }
   </style>
+
 </head>
 <body>
-  <h1>Pokemon Radar Chart - Hexagon</h1>
-  <div class="input-container">
-    <label for="pokemon1">Pokemon 1 ID:</label>
-    <input type="number" id="pokemon1" min="1" max="151">
-  </div>
-  <div class="input-container">
-    <label for="pokemon2">Pokemon 2 ID:</label>
-    <input type="number" id="pokemon2" min="1" max="151">
-  </div>
-  <svg id="chart" width="800" height="600"></svg>
-  <script src="https://d3js.org/d3.v7.min.js"></script>
-  <script>
-    async function handleData() {
-      const data = await d3.csv('/data/pokemon.csv')
+<h1>Pokemon Stat Comparison - Radar Chart </h1>
+<div class="radarChart"></div>
+<div class="legend"></div>
 
-      const attributes = ['HP', 'Attack', 'Defense', 'Sp. Atk', 'Sp. Def', 'Speed']
-      const numAttributes = attributes.length
+<script>
+  function RadarChart(id, data, options) {
+    let cfg = {
+      w: 600,               //Width of the circle
+      h: 600,               //Height of the circle
+      margin: {top: 20, right: 20, bottom: 20, left: 20}, //The margins of the SVG
+      levels: 3,            //How many levels or inner circles should there be drawn
+      maxValue: 0,          //What is the value that the biggest circle will represent
+      labelFactor: 1.25,    //How much farther than the radius of the outer circle should the labels be placed
+      wrapWidth: 60,        //The number of pixels after which a label needs to be given a new line
+      opacityArea: 0.35,    //The opacity of the area of the blob
+      dotRadius: 4,         //The size of the colored circles of each blog
+      opacityCircles: 0.1,  //The opacity of the circles of each blob
+      strokeWidth: 2,       //The width of the stroke around each blob
+      roundStrokes: false,  //If true the area and stroke will follow a round path (cardinal-closed)
+      color: d3.scale.category10()  //Color function
+    };
 
-      const svg = d3.select('#chart')
+    //Put all of the options into a letiable called cfg
+    if('undefined' !== typeof options){
+      for(let i in options){
+        if('undefined' !== typeof options[i]){ cfg[i] = options[i]; }
+      }//for i
+    }//if
 
-      const width = +svg.attr('width')
-      const height = +svg.attr('height')
-      const radius = Math.min(width, height) / 2 - 50
+    //If the supplied maxValue is smaller than the actual one, replace by the max in the data
+    let maxValue = Math.max(cfg.maxValue, d3.max(data, function(i){return d3.max(i.map(function(o){return o.value;}))}));
 
-      const colorScale = d3.scaleOrdinal(d3.schemeCategory10)
+    let allAxis = (data[0].map(function(i, j){return i.axis})),  //Names of each axis
+        total = allAxis.length,                 //The number of different axes
+        radius = Math.min(cfg.w/2, cfg.h/2),     //Radius of the outermost circle
+        Format = d3.format('.0f'),               //Formatting function
+        angleSlice = Math.PI * 2 / total;        //The width in radians of each "slice"
 
-      const angleScale = d3.scalePoint()
-        .domain(attributes)
-        .range([0, 2 * Math.PI])
-        .padding(0.5)
+    //Scale for the radius
+    let rScale = d3.scale.linear()
+      .range([0, radius])
+      .domain([0, maxValue]);
 
-      const radiusScale = d3.scaleLinear()
-        .domain([0, 255])
-        .range([0, radius])
+    //Remove whatever chart with the same id/class was present before
+    d3.select(id).select("svg").remove();
 
-      const line = d3.lineRadial()
-        .angle((d, i) => angleScale(attributes[i]))
-        .radius(d => radiusScale(d))
+    //Initiate the radar chart SVG
+    let svg = d3.select(id).append("svg")
+      .attr("width",  cfg.w + cfg.margin.left + cfg.margin.right)
+      .attr("height", cfg.h + cfg.margin.top + cfg.margin.bottom)
+      .attr("class", "radar"+id);
+    //Append a g element
+    let g = svg.append("g")
+      .attr("transform", "translate(" + (cfg.w/2 + cfg.margin.left) + "," + (cfg.h/2 + cfg.margin.top) + ")");
 
-      function updateChart() {
-        const pokemonId1 = +document.getElementById('pokemon1').value
-        const pokemonId2 = +document.getElementById('pokemon2').value
+    //Filter for the outside glow
+    let filter = g.append('defs').append('filter').attr('id','glow'),
+        feGaussianBlur = filter.append('feGaussianBlur').attr('stdDeviation','2.5').attr('result','coloredBlur'),
+        feMerge = filter.append('feMerge'),
+        feMergeNode_1 = feMerge.append('feMergeNode').attr('in','coloredBlur'),
+        feMergeNode_2 = feMerge.append('feMergeNode').attr('in','SourceGraphic');
 
-        const pokemon1 = data.find(d => +d.ID === pokemonId1)
-        const pokemon2 = data.find(d => +d.ID === pokemonId2)
+    //Wrapper for the grid & axes
+    let axisGrid = g.append("g").attr("class", "axisWrapper");
 
-        if (!pokemon1 || !pokemon2) {
-          // Invalid Pokemon IDs
-          return;
-        }
+    //Draw the background circles
+    axisGrid.selectAll(".levels")
+      .data(d3.range(1,(cfg.levels+1)).reverse())
+      .enter()
+      .append("circle")
+      .attr("class", "gridCircle")
+      .attr("r", function(d, i){return radius/cfg.levels*d;})
+      .style("fill", "#CDCDCD")
+      .style("stroke", "#CDCDCD")
+      .style("fill-opacity", cfg.opacityCircles)
+      .style("filter" , "url(#glow)");
 
-        const radarData = [
-          { name: pokemon1.Name, values: attributes.map(attr => +pokemon1[attr]) },
-          { name: pokemon2.Name, values: attributes.map(attr => +pokemon2[attr]) }
-        ]
+    //Text indicating at what % each level is
+    axisGrid.selectAll(".axisLabel")
+      .data(d3.range(1,(cfg.levels+1)).reverse())
+      .enter().append("text")
+      .attr("class", "axisLabel")
+      .attr("x", 4)
+      .attr("y", function(d){return -d*radius/cfg.levels;})
+      .attr("dy", "0.4em")
+      .style("font-size", "10px")
+      .attr("fill", "#737373")
+      .text(function(d,i) { return Format(maxValue * d/cfg.levels); });
 
-        svg.selectAll('*').remove()
+    //Create the straight lines radiating outward from the center
+    let axis = axisGrid.selectAll(".axis")
+      .data(allAxis)
+      .enter()
+      .append("g")
+      .attr("class", "axis");
+    //Append the lines
+    axis.append("line")
+      .attr("x1", 0)
+      .attr("y1", 0)
+      .attr("x2", function(d, i){ return rScale(maxValue*1.1) * Math.cos(angleSlice*i - Math.PI/2); })
+      .attr("y2", function(d, i){ return rScale(maxValue*1.1) * Math.sin(angleSlice*i - Math.PI/2); })
+      .attr("class", "line")
+      .style("stroke", "white")
+      .style("stroke-width", "2px");
 
-        const chartContainer = svg.append('g')
-          .attr('transform', `translate(${width / 2}, ${height / 2})`)
+    //Append the labels at each axis
+    axis.append("text")
+      .attr("class", "legend")
+      .style("font-size", "11px")
+      .attr("text-anchor", "middle")
+      .attr("dy", "0.35em")
+      .attr("x", function(d, i){ return rScale(maxValue * cfg.labelFactor) * Math.cos(angleSlice*i - Math.PI/2); })
+      .attr("y", function(d, i){ return rScale(maxValue * cfg.labelFactor) * Math.sin(angleSlice*i - Math.PI/2); })
+      .text(function(d){return d})
+      .call(wrap, cfg.wrapWidth);
 
-        chartContainer.selectAll('.axis-tick')
-          .data(attributes)
-          .enter()
-          .append('g')
-          .attr('class', 'axis-tick')
-          .attr('transform', d => `rotate(${angleScale(d) * 180 / Math.PI - 90}) translate(0, -${radius})`)
-          .call(g => g.append('line').attr('x2', -5))
-          .call(g => g.append('text')
-            .attr('text-anchor', 'middle')
-            .attr('transform', `rotate(${90 - angleScale.bandwidth() / 2})`)
-            .attr('y', -10)
-            .text(d => d))
+    //The radial line function
+    let radarLine = d3.svg.line.radial()
+      .interpolate("linear-closed")
+      .radius(function(d) { return rScale(d.value); })
+      .angle(function(d,i) {  return i*angleSlice; });
 
-        const hexagonPath = d3.line()
-          .x((d, i) => radius * Math.sin(2 * Math.PI * i / numAttributes))
-          .y((d, i) => -radius * Math.cos(2 * Math.PI * i / numAttributes))
-
-        chartContainer.selectAll('.radar-hexagon')
-          .data([0]) // Only one hexagon for this example
-          .enter()
-          .append('path')
-          .attr('class', 'radar-hexagon')
-          .attr('d', hexagonPath)
-          .attr('fill', 'none')
-          .attr('stroke', '#333')
-          .attr('stroke-width', 1)
-
-        chartContainer.selectAll('.radar-path')
-          .data(radarData)
-          .enter()
-          .append('path')
-          .attr('class', 'radar-path')
-          .attr('d', d => line(d.values))
-          .attr('fill', (d, i) => colorScale(i))
-          .attr('fill-opacity', 0.5)
-          .attr('stroke', (d, i) => colorScale(i))
-          .attr('stroke-width', 2)
-
-        chartContainer.selectAll('.radar-dot')
-          .data(radarData)
-          .enter()
-          .append('circle')
-          .attr('class', 'radar-dot')
-          .attr('cx', (d, i) => line(d.values)[i][1])
-          .attr('cy', (d, i) => line(d.values)[i][1])
-          .attr('r', 4)
-          .attr('fill', (d, i) => colorScale(i))
-
-        const legend = svg.append('g')
-          .attr('class', 'legend')
-          .attr('transform', `translate(${3 * width / 4}, ${height / 2 - 40})`)
-
-        legend.selectAll('.legend-label')
-          .data(radarData)
-          .enter()
-          .append('text')
-          .attr('class', 'legend-label')
-          .attr('x', 20)
-          .attr('y', (d, i) => 20 * i)
-          .attr('fill', (d, i) => colorScale(i))
-          .text(d => d.name)
-      }
-
-      document.getElementById('pokemon1').addEventListener('input', updateChart)
-      document.getElementById('pokemon2').addEventListener('input', updateChart)
+    if(cfg.roundStrokes) {
+      radarLine.interpolate("cardinal-closed");
     }
 
-    handleData()
-  </script>
+    //Create a wrapper for the blobs
+    let blobWrapper = g.selectAll(".radarWrapper")
+      .data(data)
+      .enter().append("g")
+      .attr("class", "radarWrapper");
+
+    //Append the backgrounds
+    blobWrapper
+      .append("path")
+      .attr("class", "radarArea")
+      .attr("d", function(d,i) { return radarLine(d); })
+      .style("fill", function(d,i) { return cfg.color(i); })
+      .style("fill-opacity", cfg.opacityArea)
+      .on('mouseover', function (d,i){
+        //Dim all blobs
+        d3.selectAll(".radarArea")
+          .transition().duration(200)
+          .style("fill-opacity", 0.1);
+        //Bring back the hovered over blob
+        d3.select(this)
+          .transition().duration(200)
+          .style("fill-opacity", 0.7);
+      })
+      .on('mouseout', function(){
+        //Bring back all blobs
+        d3.selectAll(".radarArea")
+          .transition().duration(200)
+          .style("fill-opacity", cfg.opacityArea);
+      });
+
+    //Create the outlines
+    blobWrapper.append("path")
+      .attr("class", "radarStroke")
+      .attr("d", function(d,i) { return radarLine(d); })
+      .style("stroke-width", cfg.strokeWidth + "px")
+      .style("stroke", function(d,i) { return cfg.color(i); })
+      .style("fill", "none")
+      .style("filter" , "url(#glow)");
+
+    //Append the circles
+    blobWrapper.selectAll(".radarCircle")
+      .data(function(d,i) { return d; })
+      .enter().append("circle")
+      .attr("class", "radarCircle")
+      .attr("r", cfg.dotRadius)
+      .attr("cx", function(d,i){ return rScale(d.value) * Math.cos(angleSlice*i - Math.PI/2); })
+      .attr("cy", function(d,i){ return rScale(d.value) * Math.sin(angleSlice*i - Math.PI/2); })
+      .style("fill", function(d,i,j) { return cfg.color(j); })
+      .style("fill-opacity", 0.8);
+
+    //Wrapper for the invisible circles on top
+    let blobCircleWrapper = g.selectAll(".radarCircleWrapper")
+      .data(data)
+      .enter().append("g")
+      .attr("class", "radarCircleWrapper");
+
+    //Append a set of invisible circles on top for the mouseover pop-up
+    blobCircleWrapper.selectAll(".radarInvisibleCircle")
+      .data(function(d,i) { return d; })
+      .enter().append("circle")
+      .attr("class", "radarInvisibleCircle")
+      .attr("r", cfg.dotRadius*1.5)
+      .attr("cx", function(d,i){ return rScale(d.value) * Math.cos(angleSlice*i - Math.PI/2); })
+      .attr("cy", function(d,i){ return rScale(d.value) * Math.sin(angleSlice*i - Math.PI/2); })
+      .style("fill", "none")
+      .style("pointer-events", "all")
+      .on("mouseover", function(d,i) {
+        newX =  parseFloat(d3.select(this).attr('cx')) - 10;
+        newY =  parseFloat(d3.select(this).attr('cy')) - 10;
+
+        tooltip
+          .attr('x', newX)
+          .attr('y', newY)
+          .text(Format(d.value))
+          .transition().duration(200)
+          .style('opacity', 1);
+      })
+      .on("mouseout", function(){
+        tooltip.transition().duration(200)
+          .style("opacity", 0);
+      });
+
+    //Set up the small tooltip for when you hover over a circle
+    let tooltip = g.append("text")
+      .attr("class", "tooltip")
+      .style("opacity", 0);
+
+    //Wraps SVG text
+    function wrap(text, width) {
+      text.each(function() {
+        let text = d3.select(this),
+          words = text.text().split(/\s+/).reverse(),
+          word,
+          line = [],
+          lineNumber = 0,
+          lineHeight = 1.4, // ems
+          y = text.attr("y"),
+          x = text.attr("x"),
+          dy = parseFloat(text.attr("dy")),
+          tspan = text.text(null).append("tspan").attr("x", x).attr("y", y).attr("dy", dy + "em");
+
+        while (word = words.pop()) {
+          line.push(word);
+          tspan.text(line.join(" "));
+          if (tspan.node().getComputedTextLength() > width) {
+            line.pop();
+            tspan.text(line.join(" "));
+            line = [word];
+            tspan = text.append("tspan").attr("x", x).attr("y", y).attr("dy", ++lineNumber * lineHeight + dy + "em").text(word);
+          }
+        }
+      });
+    }//wrap
+
+  }//RadarChart
+
+  let margin = {top: 100, right: 100, bottom: 100, left: 100},
+    width = Math.min(700, window.innerWidth - 10) - margin.left - margin.right,
+    height = Math.min(width, window.innerHeight - margin.top - margin.bottom - 20);
+
+  let color = d3.scale.ordinal()
+    .range(["#EDC951","#CC333F","#00A0B0"]);
+
+  d3.csv("/data/pokemon.csv", function(error, csvData) {
+    if (error) throw error;
+
+    // Function to filter and transform the data based on selected IDs
+    function filterData(selectedIDs) {
+      return csvData.filter(function(d) {
+        return selectedIDs.includes(+d.ID);
+      }).map(function(d) {
+        return [
+          { axis: "HP", value: +d.HP },
+          { axis: "Attack", value: +d.Attack },
+          { axis: "Defense", value: +d.Defense },
+          { axis: "Sp. Atk", value: +d["Sp. Atk"] },
+          { axis: "Sp. Def", value: +d["Sp. Def"] },
+          { axis: "Speed", value: +d.Speed },
+        ];
+      });
+    }
+		let pokeIds = [52, 92, 40]; // Example: Select Pokémon with IDs 1, 2, and 3
+    let data = filterData(pokeIds); 
+		let pokeNames = [];
+
+		// Map through the pokeIds in the csv file and match the Id# to the name
+		pokeIds.forEach(function(id) {
+			let pokemon = csvData.find(function(d) {
+				return +d.ID === id;
+			});
+			if (pokemon) {
+				pokeNames.push(pokemon.Name);
+			}
+		});
+
+    let radarChartOptions = {
+      w: width,
+      h: height,
+      margin: margin,
+      maxValue: 150,
+      levels: 5,
+      roundStrokes: true,
+      color: color
+    };
+
+    // Call function to draw the Radar chart
+    RadarChart(".radarChart", data, radarChartOptions);
+
+    // Reverse order
+    pokeNames.reverse();
+
+    // Add legend
+    let legendData = pokeNames.map(function(name, index) {
+			return { name: name, color: color(index) };
+		});
+
+    let legend = d3.select("body")
+		.append("svg")
+		.attr("class", "legend")
+		.attr("width", 200)
+		.attr("height", 100)
+		.selectAll("g")
+		.data(legendData)
+		.enter()
+		.append("g")
+		.attr("transform", function(d, i) {
+			return "translate(0," + i * 20 + ")";
+		});
+
+    legend.append("circle")
+      .attr("cx", 10)
+      .attr("cy", 10)
+      .attr("r", 5)
+      .style("fill", function(d) { return d.color; });
+
+    legend.append("text")
+      .attr("x", 20)
+      .attr("y", 10)
+      .attr("dy", "0.35em")
+      .text(function(d) { return d.name; });
+  });
+</script>
 </body>
 </html>
