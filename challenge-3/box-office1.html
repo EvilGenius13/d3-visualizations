@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>MCU Movies: Dendrogram</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Crimson+Text&family=Limelight&display=swap" rel="stylesheet">
+  <style>
+    html {
+      font-family: "Crimson Text", serif;
+      font-family: 'Limelight', cursive;
+    }
+    .node circle {
+      fill: steelblue;
+      stroke: #fff;
+      stroke-width: 2px;
+    }
+
+    .node text {
+      font-size: 14px;
+      font-family: Arial, sans-serif;
+    }
+
+    .link {
+      fill: none;
+      stroke: #ccc;
+      stroke-width: 1px;
+    }
+  </style>
+</head>
+<body>
+  <h1>MCU Phase Breakdown with Ratings - Dendrogram</h1>
+  <p>MCU = Marvel Cinematic Universe</p>
+  <svg id="dendrogram" width="1200" height="600"></svg>
+
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script>
+    const margin = { top: 20, right: 500, bottom: 20, left: 100 };
+    const width = 1200 - margin.left - margin.right;
+    const height = 600 - margin.top - margin.bottom;
+
+    const svg = d3.select("#dendrogram")
+                  .attr("width", width + margin.left + margin.right)
+                  .attr("height", height + margin.top + margin.bottom)
+                  .append("g")
+                  .attr("transform", `translate(${margin.left},${margin.top})`);
+
+    d3.csv("/data/mcu_box_office.csv").then(data => {
+      const hierarchyData = {
+        name: "MCU Movies",
+        children: Array.from(d3.group(data, d => d.mcu_phase), ([phase, movies]) => ({
+          name: `Phase ${phase}`,
+          children: movies.map(movie => ({
+            name: `${movie.movie_title} | Rating: ${movie.tomato_meter}%`,
+            value: movie.gross_domestic ? +movie.gross_domestic.replace(/,/g, "") : 0
+          }))
+        }))
+      };
+
+      const root = d3.hierarchy(hierarchyData, d => d.children);
+      const tree = d3.tree().size([height, width]);
+
+      tree(root);
+
+      const link = svg.selectAll(".link")
+                      .data(root.links())
+                      .enter()
+                      .append("path")
+                      .attr("class", "link")
+                      .attr("d", d3.linkHorizontal()
+                                   .x(d => d.y)
+                                   .y(d => d.x));
+
+      const node = svg.selectAll(".node")
+                      .data(root.descendants())
+                      .enter()
+                      .append("g")
+                      .attr("class", "node")
+                      .attr("transform", d => `translate(${d.y},${d.x})`);
+
+      node.append("circle").attr("r", 4);
+
+      node.append("text")
+          .attr("dy", "0.31em")
+          .attr("x", d => d.children ? -6 : 6)
+          .attr("text-anchor", d => d.children ? "end" : "start")
+          .text(d => d.data.name);
+    });
+  </script>
+</body>
+</html>

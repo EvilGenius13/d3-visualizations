@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>MCU Movies: Cleveland Dot Plot</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Crimson+Text&family=Limelight&display=swap" rel="stylesheet">
+  <style>
+    html {
+      font-family: "Crimson Text", serif;
+      font-family: 'Limelight', cursive;
+    }
+    .dot {
+      stroke: #fff;
+      stroke-width: 1.5px;
+    }
+
+    .tomato-dot {
+      fill: steelblue;
+    }
+
+    .audience-dot {
+      fill: red;
+    }
+
+    .line {
+      fill: none;
+      stroke: #d6d0d0;
+      stroke-width: 2px;
+    }
+
+    .axis {
+      font-size: 12px;
+      font-family: Arial, sans-serif;
+    }
+
+    .dashed-line {
+      stroke-dasharray: 4 2;
+      stroke: rgba(0, 0, 0, 0.1);
+      stroke-width: 1px;
+    }
+
+    .legend {
+      font-size: 12px;
+      font-family: Arial, sans-serif;
+    }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      margin-right: 20px;
+    }
+
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      margin-right: 5px;
+    }
+  </style>
+</head>
+<body>
+  <svg id="dotplot" width="800" height="650"></svg>
+
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script>
+    const margin = { top: 50, right: 20, bottom: 50, left: 250 };
+    const width = 1200 - margin.left - margin.right;
+    const height = 600 - margin.top - margin.bottom;
+
+    const svg = d3.select("#dotplot")
+                  .attr("width", width + margin.left + margin.right)
+                  .attr("height", height + margin.top + margin.bottom)
+                  .append("g")
+                  .attr("transform", `translate(${margin.left},${margin.top})`);
+
+    d3.csv("/data/mcu_box_office.csv").then(data => {
+      // Convert data types
+      data.forEach(d => {
+        d.tomato_score = +d.tomato_meter;
+        d.audience_score = +d.audience_score;
+      });
+
+      // Define the scales
+      const xScale = d3.scaleLinear()
+                       .domain([0, 100])
+                       .range([0, width]);
+
+      const yScale = d3.scaleBand()
+                       .domain(data.map(d => d.movie_title))
+                       .range([0, height])
+                       .padding(0.2);
+
+      // Add dashed lines for tracking
+      svg.selectAll(".dashed-line")
+         .data(data)
+         .enter()
+         .append("line")
+         .attr("class", "dashed-line")
+         .attr("x1", 0)
+         .attr("y1", d => yScale(d.movie_title) + yScale.bandwidth() / 2)
+         .attr("x2", width)
+         .attr("y2", d => yScale(d.movie_title) + yScale.bandwidth() / 2);
+
+      // Draw dots for tomato_score
+      svg.selectAll(".tomato-dot")
+         .data(data)
+         .enter()
+         .append("circle")
+         .attr("class", "dot tomato-dot")
+         .attr("cx", d => xScale(d.tomato_score))
+         .attr("cy", d => yScale(d.movie_title) + yScale.bandwidth() / 2)
+         .attr("r", 4);
+
+      // Draw dots for audience_score
+      svg.selectAll(".audience-dot")
+         .data(data)
+         .enter()
+         .append("circle")
+         .attr("class", "dot audience-dot")
+         .attr("cx", d => xScale(d.audience_score))
+         .attr("cy", d => yScale(d.movie_title) + yScale.bandwidth() / 2)
+         .attr("r", 4);
+
+      // Connect the dots with lines
+      const line = d3.line()
+                     .x(d => xScale(d.score))
+                     .y(d => yScale(d.movie_title) + yScale.bandwidth() / 2);
+
+      svg.selectAll(".line")
+         .data(data)
+         .enter()
+         .append("path")
+         .attr("class", "line")
+         .attr("d", d => line([{ score: d.tomato_score, movie_title: d.movie_title }, { score: d.audience_score, movie_title: d.movie_title }]));
+
+      // Add x-axis
+      const xAxis = d3.axisBottom(xScale).ticks(20).tickFormat(d => `${d}%`);
+      svg.append("g")
+         .attr("class", "axis")
+         .attr("transform", `translate(0, ${height})`)
+         .call(xAxis);
+
+      // Add y-axis
+      const yAxis = d3.axisLeft(yScale).tickSize(0);
+      svg.append("g")
+         .attr("class", "axis")
+         .call(yAxis);
+
+      // Add legend
+      const legend = svg.append("g")
+                        .attr("class", "legend")
+                        .attr("transform", `translate(0, ${height + margin.bottom / 2})`);
+
+      const legendItems = legend.selectAll(".legend-item")
+                               .data([
+                                 { label: "Critic Score", color: "steelblue" },
+                                 { label: "Audience Score", color: "red" }
+                               ])
+                               .enter()
+                               .append("g")
+                               .attr("class", "legend-item")
+                               .attr("transform", (d, i) => `translate(${i * 200 + 40}, 20)`);
+
+      legendItems.append("circle")
+                 .attr("class", "legend-dot")
+                 .attr("cx", 0)
+                 .attr("cy", 0)
+                 .attr("r", 4)
+                 .style("fill", d => d.color);
+
+      legendItems.append("text")
+                 .attr("x", 10)
+                 .attr("y", 4)
+                 .text(d => d.label);
+
+      // Title
+      svg.append("text")
+         .attr("x", width / 2)
+         .attr("y", -margin.top / 2)
+         .attr("text-anchor", "middle")
+         .text("MCU Movies Critic/Audience Ratings - Cleveland Dot Plot")
+         .style("font-size", 24)
+    });
+  </script>
+</body>
+</html>

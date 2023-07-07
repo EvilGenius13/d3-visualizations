@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>MCU Movies: Gross Domestic Box Office by Year and Phase - Bar Chart</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Crimson+Text&family=Limelight&display=swap" rel="stylesheet">
+  <style>
+    html {
+      font-family: "Crimson Text", serif;
+      font-family: 'Limelight', cursive;
+    }
+    .label {
+      font-size: 12px;
+      text-anchor: middle;
+    }
+  </style>
+</head>
+<body>
+  <svg id="barchart" width="800" height="600"></svg>
+
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script>
+    // SVG setup
+    const margin = { top: 50, right: 20, bottom: 250, left: 50 };
+    const width = 1200 - margin.left - margin.right;
+    const height = 700 - margin.top - margin.bottom;
+
+    const svg = d3.select("#barchart")
+                  .attr("width", width + margin.left + margin.right)
+                  .attr("height", height + margin.top + margin.bottom)
+                  .append("g")
+                  .attr("transform", `translate(${margin.left},${margin.top})`);
+
+    // Load data from CSV
+    d3.csv("/data/mcu_box_office.csv", (d) => {
+      d.gross_domestic = +d.domestic_box_office.replace(/,/g, "");
+      d.release_year = new Date(d.release_date).getFullYear();
+      return d;
+    }).then(data => {
+      // Sort data by release year and phase
+      data.sort((a, b) => {
+        if (a.release_year !== b.release_year) {
+          return a.release_year - b.release_year;
+        } else {
+          return a.mcu_phase - b.mcu_phase;
+        }
+      });
+
+      // Group data by phase
+      const dataByPhase = d3.group(data, d => d.mcu_phase);
+
+      // Calculate the maximum gross domestic value for scaling
+      const maxGrossDomestic = d3.max(data, d => d.gross_domestic);
+
+      // X-scale setup
+      const xScale = d3.scaleBand()
+                       .domain(data.map(d => d.movie_title))
+                       .range([0, width])
+                       .padding(0.1);
+
+      // Y-scale setup
+      const yScale = d3.scaleLinear()
+                       .domain([0, maxGrossDomestic])
+                       .range([height, 0]);
+
+      // X-axis setup
+      const xAxis = d3.axisBottom(xScale);
+
+      // Y-axis setup
+      const yAxis = d3.axisLeft(yScale).ticks(5).tickFormat(d3.format(".2s"));
+
+      // Define color scale
+      const colorScale = d3.scaleOrdinal()
+                           .domain(Array.from(dataByPhase.keys()))
+                           .range(d3.schemeCategory10);
+
+      // Add x-axis
+      svg.append("g")
+         .attr("transform", `translate(0,${height})`)
+         .call(xAxis)
+         .selectAll("text")
+         .attr("transform", "rotate(-30)")
+         .style("text-anchor", "end")
+         .attr("dx", "-0.8em")
+         .attr("dy", "0.15em");
+
+      // Add y-axis
+      svg.append("g")
+         .call(yAxis);
+
+      // Draw bars
+      svg.selectAll(".bar")
+        .data(data)
+        .enter()
+        .append("rect")
+        .attr("class", "bar")
+        .attr("x", d => xScale(d.movie_title))
+        .attr("y", height)
+        .attr("width", xScale.bandwidth())
+        .attr("height", 0)
+        .style("fill", d => colorScale(d.mcu_phase))
+        .transition()
+        .duration(800)
+        .delay((d, i) => i * 100)
+        .attr("y", d => yScale(d.gross_domestic))
+        .attr("height", d => height - yScale(d.gross_domestic));
+
+
+      // Phase labels
+      const phases = Array.from(dataByPhase.keys());
+      const phaseWidth = width / phases.length;
+
+      svg.selectAll(".phase")
+         .data(phases)
+         .enter()
+         .append("text")
+         .attr("class", "label")
+         .attr("x", (d, i) => i * phaseWidth + phaseWidth / 2)
+         .attr("y", height + margin.bottom - 150)
+         .style("text-anchor", "middle")
+         .text(d => `Phase ${d}`);
+
+      // Title
+      svg.append("text")
+         .attr("class", "label")
+         .attr("x", width / 2)
+         .attr("y", -margin.top / 2)
+         .style("text-anchor", "middle")
+         .text("MCU Movies: Gross Domestic Box Office by Year and Phase")
+         .style("font-size", "24px");
+    });
+  </script>
+</body>
+</html>
